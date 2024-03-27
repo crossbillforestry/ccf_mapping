@@ -6,68 +6,352 @@
         <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
-        <link rel="stylesheet" href="./resources/ol.css">
-        <link rel="stylesheet" href="resources/fontawesome-all.min.css">
-        <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
-        <link rel="stylesheet" href="./resources/qgis2web.css">
-<style>
-.search-layer {
-  top: 65px;
-  left: .5em;
-}
-.ol-touch .search-layer {
-  top: 80px;
-}
-</style>
-        <style>
-        html, body {
-            background-color: #ffffff;
-        }
-        .ol-control button {
-            background-color: #f8f8f8 !important;
-            color: #000000 !important;
-            border-radius: 0px !important;
-        }
-        .ol-zoom, .geolocate, .gcd-gl-control .ol-control {
-            background-color: rgba(255,255,255,.4) !important;
-            padding: 3px !important;
-        }
-        .ol-scale-line {
-            background: none !important;
-        }
-        .ol-scale-line-inner {
-            border: 2px solid #f8f8f8 !important;
-            border-top: none !important;
-            background: rgba(255, 255, 255, 0.5) !important;
-            color: black !important;
-        }
-        </style>
+        <link rel="stylesheet" href="css/leaflet.css"><link rel="stylesheet" href="css/L.Control.Locate.min.css">
+        <link rel="stylesheet" href="css/qgis2web.css"><link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-control-geocoder.Geocoder.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
         <style>
         #map {
-            width: 1405px;
+            width: 1172px;
             height: 873px;
         }
         </style>
         <title></title>
     </head>
     <body>
-        <center>
         <div id="map">
-            <div id="popup" class="ol-popup">
-                <a href="#" id="popup-closer" class="ol-popup-closer"></a>
-                <div id="popup-content"></div>
-            </div>
         </div>
-        <script src="resources/qgis2web_expressions.js"></script>
-        <script src="resources/polyfills.js"></script>
-        <script src="./resources/functions.js"></script>
-        <script src="./resources/ol.js"></script>
-        <script src="./resources/ol-layerswitcher.js"></script>
-        <script src="layers/Plantingopportunity_1.js"></script>
-        <script src="styles/Plantingopportunity_1_style.js"></script>
-        <script src="./layers/layers.js" type="text/javascript"></script> 
-        <script src="./resources/Autolinker.min.js"></script>
-        <script src="./resources/qgis2web.js"></script>
-        </center>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script><script src="js/L.Control.Locate.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet-control-geocoder.Geocoder.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="data/Plantingopportunity_1.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString') {
+              highlightLayer.setStyle({
+                color: '#ffff00',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: '#ffff00',
+                fillOpacity: 1
+              });
+            }
+        }
+        var map = L.map('map', {
+            zoomControl:true, maxZoom:28, minZoom:1
+        }).fitBounds([[53.93769638063072,-4.483694565033618],[55.118704738646386,-1.7741853275984127]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        document.querySelector(".leaflet-popup-pane").addEventListener("load", function(event) {
+          var tagName = event.target.tagName,
+            popup = map._popup;
+          // Also check if flag is already set.
+          if (tagName === "IMG" && popup && !popup._updated) {
+            popup._updated = true; // Set flag to prevent looping.
+            popup.update();
+          }
+        }, true);
+        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+        .innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0]
+        .className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_OSMStandard_0');
+        map.getPane('pane_OSMStandard_0').style.zIndex = 400;
+        var layer_OSMStandard_0 = L.tileLayer('http://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OSMStandard_0',
+            opacity: 1.0,
+            attribution: '<a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors, CC-BY-SA</a>',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OSMStandard_0;
+        map.addLayer(layer_OSMStandard_0);
+        function pop_Plantingopportunity_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (i in e.target._eventParents) {
+                        e.target._eventParents[i].resetStyle(e.target);
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">cat</th>\
+                        <td>' + (feature.properties['cat'] !== null ? autolinker.link(feature.properties['cat'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">pl_area</th>\
+                        <td class="visible-with-data" id="pl_area">' + (feature.properties['pl_area'] !== null ? autolinker.link(feature.properties['pl_area'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">target</th>\
+                        <td class="visible-with-data" id="target">' + (feature.properties['target'] !== null ? autolinker.link(feature.properties['target'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">prop_pl</th>\
+                        <td class="visible-with-data" id="prop_pl">' + (feature.properties['prop_pl'] !== null ? autolinker.link(feature.properties['prop_pl'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">existing_w</th>\
+                        <td class="visible-with-data" id="existing_w">' + (feature.properties['existing_w'] !== null ? autolinker.link(feature.properties['existing_w'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">railway_fo</th>\
+                        <td class="visible-with-data" id="railway_fo">' + (feature.properties['railway_fo'] !== null ? autolinker.link(feature.properties['railway_fo'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">roads_nati</th>\
+                        <td class="visible-with-data" id="roads_nati">' + (feature.properties['roads_nati'] !== null ? autolinker.link(feature.properties['roads_nati'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">roads_loca</th>\
+                        <td class="visible-with-data" id="roads_loca">' + (feature.properties['roads_loca'] !== null ? autolinker.link(feature.properties['roads_loca'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">roads_regi</th>\
+                        <td class="visible-with-data" id="roads_regi">' + (feature.properties['roads_regi'] !== null ? autolinker.link(feature.properties['roads_regi'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">surface_wa</th>\
+                        <td class="visible-with-data" id="surface_wa">' + (feature.properties['surface_wa'] !== null ? autolinker.link(feature.properties['surface_wa'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">buildings</th>\
+                        <td class="visible-with-data" id="buildings">' + (feature.properties['buildings'] !== null ? autolinker.link(feature.properties['buildings'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">gas_transm</th>\
+                        <td class="visible-with-data" id="gas_transm">' + (feature.properties['gas_transm'] !== null ? autolinker.link(feature.properties['gas_transm'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">non_woodla</th>\
+                        <td class="visible-with-data" id="non_woodla">' + (feature.properties['non_woodla'] !== null ? autolinker.link(feature.properties['non_woodla'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">wfc_housin</th>\
+                        <td class="visible-with-data" id="wfc_housin">' + (feature.properties['wfc_housin'] !== null ? autolinker.link(feature.properties['wfc_housin'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">scheduled_</th>\
+                        <td class="visible-with-data" id="scheduled_">' + (feature.properties['scheduled_'] !== null ? autolinker.link(feature.properties['scheduled_'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ldnpa_hous</th>\
+                        <td class="visible-with-data" id="ldnpa_hous">' + (feature.properties['ldnpa_hous'] !== null ? autolinker.link(feature.properties['ldnpa_hous'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">watercours</th>\
+                        <td class="visible-with-data" id="watercours">' + (feature.properties['watercours'] !== null ? autolinker.link(feature.properties['watercours'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">electricit</th>\
+                        <td class="visible-with-data" id="electricit">' + (feature.properties['electricit'] !== null ? autolinker.link(feature.properties['electricit'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">above_500m</th>\
+                        <td class="visible-with-data" id="above_500m">' + (feature.properties['above_500m'] !== null ? autolinker.link(feature.properties['above_500m'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">ancient_wo</th>\
+                        <td class="visible-with-data" id="ancient_wo">' + (feature.properties['ancient_wo'] !== null ? autolinker.link(feature.properties['ancient_wo'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">economic_d</th>\
+                        <td class="visible-with-data" id="economic_d">' + (feature.properties['economic_d'] !== null ? autolinker.link(feature.properties['economic_d'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">fifteen_mi</th>\
+                        <td class="visible-with-data" id="fifteen_mi">' + (feature.properties['fifteen_mi'] !== null ? autolinker.link(feature.properties['fifteen_mi'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">flood_zone</th>\
+                        <td class="visible-with-data" id="flood_zone">' + (feature.properties['flood_zone'] !== null ? autolinker.link(feature.properties['flood_zone'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">poor_air_q</th>\
+                        <td class="visible-with-data" id="poor_air_q">' + (feature.properties['poor_air_q'] !== null ? autolinker.link(feature.properties['poor_air_q'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">public_hea</th>\
+                        <td class="visible-with-data" id="public_hea">' + (feature.properties['public_hea'] !== null ? autolinker.link(feature.properties['public_hea'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">woodland_a</th>\
+                        <td class="visible-with-data" id="woodland_a">' + (feature.properties['woodland_a'] !== null ? autolinker.link(feature.properties['woodland_a'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">woodland_c</th>\
+                        <td class="visible-with-data" id="woodland_c">' + (feature.properties['woodland_c'] !== null ? autolinker.link(feature.properties['woodland_c'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">wood_pastu</th>\
+                        <td class="visible-with-data" id="wood_pastu">' + (feature.properties['wood_pastu'] !== null ? autolinker.link(feature.properties['wood_pastu'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">total_area</th>\
+                        <td class="visible-with-data" id="total_area">' + (feature.properties['total_area'] !== null ? autolinker.link(feature.properties['total_area'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">os_update</th>\
+                        <td class="visible-with-data" id="os_update">' + (feature.properties['os_update'] !== null ? autolinker.link(feature.properties['os_update'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">plant</th>\
+                        <td class="visible-with-data" id="plant">' + (feature.properties['plant'] !== null ? autolinker.link(feature.properties['plant'].toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            layer.bindPopup(popupContent, {maxHeight: 400});
+            var popup = layer.getPopup();
+            var content = popup.getContent();
+            var updatedContent = removeEmptyRowsFromPopupContent(content, feature);
+            popup.setContent(updatedContent);
+        }
+
+        function style_Plantingopportunity_1_0(feature) {
+            if (feature.properties['os_update'] >= 0.000000 && feature.properties['os_update'] <= 72.728000 ) {
+                return {
+                pane: 'pane_Plantingopportunity_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.7)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(247,252,245,0.7)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['os_update'] >= 72.728000 && feature.properties['os_update'] <= 368.314000 ) {
+                return {
+                pane: 'pane_Plantingopportunity_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.7)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(201,234,194,0.7)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['os_update'] >= 368.314000 && feature.properties['os_update'] <= 612.388000 ) {
+                return {
+                pane: 'pane_Plantingopportunity_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.7)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(123,199,124,0.7)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['os_update'] >= 612.388000 && feature.properties['os_update'] <= 771.658000 ) {
+                return {
+                pane: 'pane_Plantingopportunity_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.7)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(42,146,75,0.7)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['os_update'] >= 771.658000 && feature.properties['os_update'] <= 1548.280000 ) {
+                return {
+                pane: 'pane_Plantingopportunity_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,0.7)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(0,68,27,0.7)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_Plantingopportunity_1');
+        map.getPane('pane_Plantingopportunity_1').style.zIndex = 401;
+        map.getPane('pane_Plantingopportunity_1').style['mix-blend-mode'] = 'normal';
+        var layer_Plantingopportunity_1 = new L.geoJson(json_Plantingopportunity_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Plantingopportunity_1',
+            layerName: 'layer_Plantingopportunity_1',
+            pane: 'pane_Plantingopportunity_1',
+            onEachFeature: pop_Plantingopportunity_1,
+            style: style_Plantingopportunity_1_0,
+        });
+        bounds_group.addLayer(layer_Plantingopportunity_1);
+        map.addLayer(layer_Plantingopportunity_1);
+        var osmGeocoder = new L.Control.Geocoder({
+            collapsed: true,
+            position: 'topleft',
+            text: 'Search',
+            title: 'Testing'
+        }).addTo(map);
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .className += ' fa fa-search';
+        document.getElementsByClassName('leaflet-control-geocoder-icon')[0]
+        .title += 'Search for a place';
+        var baseMaps = {};
+        L.control.layers(baseMaps,{'Planting opportunity<br /><table><tr><td style="text-align: center;"><img src="legend/Plantingopportunity_1_Low0.png" /></td><td>Low</td></tr><tr><td style="text-align: center;"><img src="legend/Plantingopportunity_1_Medlow1.png" /></td><td>Med low</td></tr><tr><td style="text-align: center;"><img src="legend/Plantingopportunity_1_Med2.png" /></td><td>Med</td></tr><tr><td style="text-align: center;"><img src="legend/Plantingopportunity_1_Medhigh3.png" /></td><td>Med high</td></tr><tr><td style="text-align: center;"><img src="legend/Plantingopportunity_1_High4.png" /></td><td>High</td></tr></table>': layer_Plantingopportunity_1,"OSM Standard": layer_OSMStandard_0,},{collapsed:false}).addTo(map);
+        setBounds();
+        </script>
     </body>
 </html>
