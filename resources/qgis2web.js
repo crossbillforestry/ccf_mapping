@@ -431,7 +431,7 @@ var onSingleClick = function(evt) {
     if (popupText) {
         overlayPopup.setPosition(coord);
         content.innerHTML = popupText;
-        container.style.display = 'block';        
+        container.style.display = 'block';  
     } else {
         container.style.display = 'none';
         closer.blur();
